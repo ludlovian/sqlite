@@ -2,6 +2,7 @@ import process from 'node:process'
 import fs from 'node:fs'
 import SQLite3Database from 'better-sqlite3'
 import Bouncer from '@ludlovian/bouncer'
+import sqlmin from './sqlmin.mjs'
 
 export default class Database {
   #db
@@ -17,10 +18,10 @@ export default class Database {
     const fileExists = realFile && fs.existsSync(file)
     this.#db = new SQLite3Database(file)
     if (realFile && createDDL && !fileExists) {
-      this.#db.exec(tidySQL(createDDL))
+      this.#db.exec(sqlmin(createDDL))
     }
     if (runtimeDDL) {
-      this.#db.exec(tidySQL(runtimeDDL))
+      this.#db.exec(sqlmin(runtimeDDL))
     }
     if (checkSchema) {
       const schema = this.read('_Schema')

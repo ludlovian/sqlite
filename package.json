@@ -7,6 +7,10 @@
   "exports": {
     ".": "./src/index.mjs"
   },
+  "bin": {
+    "sqlmin": "./bin/sqlmin.mjs",
+    "sql2mjs": ".bin/sql2mjs.mjs"
+  },
   "scripts": {
     "clean": "rm -rf coverage/ node_modules/.cache/",
     "lint": "standard '{src,test}/**/*.mjs'|snazzy",
