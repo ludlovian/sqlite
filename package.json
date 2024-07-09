@@ -26,10 +26,10 @@
   "homepage": "https://github.com/ludlovian/sqlite#readme",
   "keywords": [],
   "devDependencies": {
-    "better-sqlite3": "^11.1.2"
+    "better-sqlite3": ">7.0.0"
   },
   "peerDependencies": {
-    "better-sqlite3": "^11.1.2"
+    "better-sqlite3": ">7.0.0"
   },
   "dependencies": {
     "@ludlovian/bouncer": "github:ludlovian/bouncer"
