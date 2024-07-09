@@ -198,22 +198,3 @@ export default class Database {
 
 Database.prototype.get = Database.prototype.read
 Database.prototype.all = Database.prototype.readAll
-
-function tidySQL (sql) {
-  return (
-    sql
-      // split into lines
-      .split(/\r?\n/)
-      // remove comments & whitespace
-      .map(line => line.replace(/--.*$/, '').trim())
-      // remove blank lines
-      .filter(Boolean)
-      // rejoin
-      .join(' ')
-      // remove multiple spaces
-      .replace(/  +/g, ' ')
-      // remove spaces between words and non-words
-      .replace(/(\w) +(\W)/g, '$1$2')
-      .replace(/(\W) +(\w)/g, '$1$2')
-  )
-}
