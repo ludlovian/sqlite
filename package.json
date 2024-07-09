@@ -9,7 +9,7 @@
   },
   "bin": {
     "sqlmin": "./bin/sqlmin.mjs",
-    "sql2mjs": ".bin/sql2mjs.mjs"
+    "sql2mjs": "./bin/sql2mjs.mjs"
   },
   "scripts": {
     "clean": "rm -rf coverage/ node_modules/.cache/",
