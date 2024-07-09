@@ -1,0 +1,37 @@
+{
+  "name": "@ludlovian/sqlite",
+  "version": "0.0.0",
+  "description": "My sqlite access",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "scripts": {
+    "clean": "rm -rf coverage/ node_modules/.cache/",
+    "lint": "standard '{src,test}/**/*.mjs'|snazzy",
+    "format": "prettier-standard '{src,test}/**/*.mjs'",
+    "test": "c8 node --test",
+    "coverage": "npm run test && c8 report --reporter=html && sirv coverage/ -p 8000 -H"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ludlovian/sqlite.git"
+  },
+  "author": "",
+  "license": "Unlicense",
+  "bugs": {
+    "url": "https://github.com/ludlovian/sqlite/issues"
+  },
+  "homepage": "https://github.com/ludlovian/sqlite#readme",
+  "keywords": [],
+  "devDependencies": {
+    "better-sqlite3": "^11.1.2"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "^11.1.2"
+  },
+  "dependencies": {
+    "@ludlovian/bouncer": "github:ludlovian/bouncer"
+  }
+}
