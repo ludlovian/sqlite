@@ -58,12 +58,16 @@ Calls a stored proc (realy a view with an insert trigger)
 
 Calls a single arbitrary SQL statement. Best to avoid.
 
-### transaction([options,] function)
+### transaction(function)
 
-Calls the specified function inside a transaction, coping with
+Calls the specified function inside a sync transaction, coping with
 rollbacks as needed.
 
-If `{ every }` is given in the options, then this will be an async transcation committing at regular intervals until completed
+### asyncTransaction(ms, function)
+
+Calls the specified async function, committing regularly every `ms` milliseconds.
+
+Any failure will only rollbaack to the last commit.
 
 ### notify(callback) => disposeFunction
 

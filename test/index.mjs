@@ -1,9 +1,12 @@
 import { suite, test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import process from 'node:process'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { execSync } from 'node:child_process'
 
 import Database from '../src/index.mjs'
+
+process.setMaxListeners(50)
 
 suite('sqlite', { concurrency: false }, () => {
   const dbFile = 'test/test.db'
@@ -37,6 +40,7 @@ suite('sqlite', { concurrency: false }, () => {
         ;
       `
     })
+    db._db.exec('begin transaction')
 
     let exp
     let act
@@ -56,17 +60,17 @@ suite('sqlite', { concurrency: false }, () => {
     assert.deepStrictEqual(act, exp)
 
     db._db.exec('drop view foo')
+    db._db.exec('commit')
     db.close()
   })
 
   test('update by inserting', () => {
     const db = new Database(dbFile)
-    db._db.exec('create table foo(bar,baz)')
+    db.exec('begin transaction')
+    db.exec('create table foo(bar,baz)')
 
-    db.transaction(() => {
-      db.update('foo', { bar: 12, baz: 'fizz' })
-      db.update('foo', { bar: 13, baz: 'buzz' })
-    })
+    db.update('foo', { bar: 12, baz: 'fizz' })
+    db.update('foo', { bar: 13, baz: 'buzz' })
 
     const exp = [
       { bar: 12, baz: 'fizz' },
@@ -76,29 +80,32 @@ suite('sqlite', { concurrency: false }, () => {
     assert.deepStrictEqual(act, exp)
 
     db.exec('drop table foo')
+    db.exec('commit')
     db.close()
   })
 
   test('update by inserting to non-parameter view', () => {
     const db = new Database(dbFile)
+    db.exec('begin transaction')
     db.exec('create table foo (unused)')
     db.update('foo')
     const exp = { unused: null }
     const act = db.read('foo')
     assert.deepStrictEqual(act, exp)
     db.exec('drop table foo')
+    db.exec('commit')
     db.close()
   })
 
   test('async transaction', async () => {
     const db = new Database(dbFile)
     db.exec('create table foo (bar, baz)')
-    await db.transaction({ every: 50 }, async () => {
+    await db.asyncTransaction(250, async () => {
       db.update('foo', { bar: 12, baz: 'fizz' })
       assert(db._inTransaction)
       db.update('foo', { bar: 13, baz: 'buzz' })
       assert(db._inTransaction)
-      await sleep(100)
+      await sleep(300)
       assert(!db._inTransaction)
       db.update('foo', { bar: 14, baz: 'bozz' })
       assert(db._inTransaction)
@@ -136,7 +143,7 @@ suite('sqlite', { concurrency: false }, () => {
     db.exec('create table foo (bar, baz)')
 
     await assert.rejects(
-      db.transaction({ every: 50 }, async () => {
+      db.asyncTransaction(500, async () => {
         db.update('foo', { bar: 12, baz: 'fizz' })
         assert(db._inTransaction)
         await sleep(10)
@@ -175,9 +182,9 @@ suite('sqlite', { concurrency: false }, () => {
     const db = new Database(dbFile)
     db.exec('create table foo (bar, baz)')
 
-    await db.transaction({ every: 500 }, async () => {
+    await db.asyncTransaction(500, async () => {
       db.update('foo', { bar: 12, baz: 'fizz' })
-      await db.transaction({ every: 500 }, async () => {
+      await db.asyncTransaction(500, async () => {
         db.update('foo', { bar: 13, baz: 'buzz' })
       })
     })
@@ -185,7 +192,6 @@ suite('sqlite', { concurrency: false }, () => {
     const count = countFoo(db)
     assert.strictEqual(count, 2)
 
-    db.exec('drop table if exists foo')
     db.exec('drop table if exists foo')
     db.close()
   })
@@ -218,6 +224,40 @@ suite('sqlite', { concurrency: false }, () => {
     ]
     assert.deepStrictEqual(calls, exp)
     remove()
+
+    db.exec('drop table foo')
+    db.close()
+  })
+
+  test('sync transaction returns value', () => {
+    const db = new Database(dbFile)
+    db._db.exec('create table foo(bar,baz)')
+
+    const exp = 17
+    const act = db.transaction(() => {
+      db.update('foo', { bar: 12, baz: 'fizz' })
+      db.update('foo', { bar: 13, baz: 'buzz' })
+      return 17
+    })
+
+    assert.deepStrictEqual(act, exp)
+
+    db.exec('drop table foo')
+    db.close()
+  })
+
+  test('async transaction returns value', async () => {
+    const db = new Database(dbFile)
+    db._db.exec('create table foo(bar,baz)')
+
+    const exp = 17
+    const act = await db.asyncTransaction(500, async () => {
+      db.update('foo', { bar: 12, baz: 'fizz' })
+      db.update('foo', { bar: 13, baz: 'buzz' })
+      return 17
+    })
+
+    assert.deepStrictEqual(act, exp)
 
     db.exec('drop table foo')
     db.close()

@@ -29,7 +29,8 @@ export default class Database {
         throw new Error('Invalid schema: ' + file)
       }
     }
-    process.on('exit', this.close.bind(this))
+    this.close = this.close.bind(this)
+    process.on('exit', this.close)
   }
 
   get _db () {
@@ -41,9 +42,11 @@ export default class Database {
   }
 
   close () {
-    if (!this.#db || !this.#db.open) return
-    this.#commit()
-    this.#db.close()
+    process.removeListener('exit', this.close)
+    if (this.#db && this.#db.open) {
+      this.#commit()
+      this.#db.close()
+    }
   }
 
   update (name, ...parms) {
@@ -68,14 +71,45 @@ export default class Database {
     stmt.run()
   }
 
-  transaction (opts, fn) {
-    if (typeof opts === 'function') {
-      fn = opts
-      opts = undefined
+  transaction (fn) {
+    if (this.#inTransaction) return fn()
+    let result
+    this.#begin()
+    try {
+      result = fn()
+      this.#commit()
+    } catch (err) {
+      this.#rollback()
+      throw err
     }
-    const every = opts?.every
-    if (!every) return this.#syncTransaction(fn)
-    return this.#asyncTransaction(every, fn)
+    return result
+  }
+
+  async asyncTransaction (ms, fn) {
+    if (this.#inTransaction) return await fn()
+    const bouncer = new Bouncer({
+      every: ms,
+      leading: false,
+      fn: () => this.#commit()
+    })
+    const remove = this.#addUpdateHook('pre', () => {
+      // begin a transaction if we haven't already
+      this.#begin()
+      // start or signal the bouncer
+      bouncer.fire()
+    })
+    try {
+      const result = await fn()
+      this.#commit()
+      bouncer.cancel()
+      remove()
+      return result
+    } catch (err) {
+      this.#rollback()
+      bouncer.cancel()
+      remove()
+      throw err
+    }
   }
 
   notify (fn) {
@@ -136,43 +170,6 @@ export default class Database {
   #removeUpdateHook (type, hookFn) {
     this.#hooks[type] = this.#hooks[type].filter(fn => fn !== hookFn)
     if (!this.#hooks[type].length) this.#handler[type] = undefined
-  }
-
-  #syncTransaction (fn) {
-    if (this.#inTransaction) return fn()
-    this.#begin()
-    try {
-      fn()
-    } catch (err) {
-      this.#rollback()
-      throw err
-    }
-    this.#commit()
-  }
-
-  async #asyncTransaction (every, fn) {
-    if (this.#inTransaction) return fn()
-    const bouncer = new Bouncer({
-      every,
-      leading: false,
-      fn: () => this.#commit()
-    })
-    const remove = this.#addUpdateHook('pre', () => {
-      // begin a transaction if we haven't already
-      this.#begin()
-      // start or signal the bouncer
-      bouncer.fire()
-    })
-    try {
-      await fn()
-      this.#commit()
-    } catch (err) {
-      this.#rollback()
-      throw err
-    } finally {
-      bouncer.cancel()
-      remove()
-    }
   }
 
   #begin () {
