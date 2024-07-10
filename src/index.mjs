@@ -9,9 +9,18 @@ export default class Database {
   #stmts = {}
   #updateStmts = {}
   #readStmts = {}
-  #inTransaction = false
+  #commitMgr = {
+    delay: 0,
+    active: 0,
+    dispose: undefined,
+    bouncer: undefined
+  }
+
   #handler = { pre: undefined, post: undefined }
   #hooks = { pre: [], post: [] }
+
+  // --------------------------------------------------------------
+  // Construction
 
   constructor (file, { createDDL, runtimeDDL, checkSchema } = {}) {
     const realFile = !!file && !file.startsWith(':')
@@ -33,13 +42,30 @@ export default class Database {
     process.on('exit', this.close)
   }
 
+  // --------------------------------------------------------------
+  // Getters & setters
+
   get _db () {
     return this.#db
   }
 
   get _inTransaction () {
-    return this.#inTransaction
+    return this.#commitMgr.active
   }
+
+  get autoCommit () {
+    return this.#commitMgr.delay
+  }
+
+  set autoCommit (ms) {
+    if (this.autoCommit === ms) return
+    this.#commitMgr.delay = ms
+    this.#stopAutoCommit()
+    if (ms) this.#startAutoCommit()
+  }
+
+  // --------------------------------------------------------------
+  // Public API
 
   close () {
     process.removeListener('exit', this.close)
@@ -66,13 +92,13 @@ export default class Database {
     return stmt.all(...parms)
   }
 
-  exec (sql) {
+  exec (sql, ...parms) {
     const stmt = this.#getStmt(sql)
-    stmt.run()
+    stmt.run(...parms)
   }
 
   transaction (fn) {
-    if (this.#inTransaction) return fn()
+    if (this._inTransaction) return fn()
     let result
     this.#begin()
     try {
@@ -86,28 +112,17 @@ export default class Database {
   }
 
   async asyncTransaction (ms, fn) {
-    if (this.#inTransaction) return await fn()
-    const bouncer = new Bouncer({
-      every: ms,
-      leading: false,
-      fn: () => this.#commit()
-    })
-    const remove = this.#addUpdateHook('pre', () => {
-      // begin a transaction if we haven't already
-      this.#begin()
-      // start or signal the bouncer
-      bouncer.fire()
-    })
+    if (this._inTransaction) return await fn()
+    const oldAutoCommit = this.autoCommit
+    this.autoCommit = ms
     try {
       const result = await fn()
       this.#commit()
-      bouncer.cancel()
-      remove()
+      this.autoCommit = oldAutoCommit
       return result
     } catch (err) {
       this.#rollback()
-      bouncer.cancel()
-      remove()
+      this.autoCommit = oldAutoCommit
       throw err
     }
   }
@@ -116,8 +131,11 @@ export default class Database {
     return this.#addUpdateHook('post', fn)
   }
 
+  // --------------------------------------------------------------
+  // Internal - Statement management
+
   #getReadStmt (name, parms = {}) {
-    const cols = Object.keys(parms).sort()
+    const cols = Object.keys(parms)
     const key = [name, ...cols].join(',')
     let stmt = this.#readStmts[key]
     if (stmt) return stmt
@@ -158,6 +176,9 @@ export default class Database {
     return stmt
   }
 
+  // --------------------------------------------------------------
+  // Internal - Update hooks
+
   #addUpdateHook (type, hookFn) {
     this.#hooks[type].push(hookFn)
     if (!this.#handler[type]) {
@@ -172,24 +193,52 @@ export default class Database {
     if (!this.#hooks[type].length) this.#handler[type] = undefined
   }
 
+  // --------------------------------------------------------------
+  // Internal - Transaction
+
   #begin () {
-    if (this.#inTransaction) return
+    if (this.#commitMgr.active) return
     this.#getStmt('begin transaction').run()
-    this.#inTransaction = true
+    this.#commitMgr.active = true
   }
 
   #rollback () {
     // defensive
     /* c8 ignore next */
-    if (!this.#inTransaction) return
+    if (!this.#commitMgr.active) return
     this.#getStmt('rollback').run()
-    this.#inTransaction = false
+    this.#commitMgr.active = false
   }
 
   #commit () {
-    if (!this.#inTransaction) return
+    if (!this.#commitMgr.active) return
     this.#getStmt('commit').run()
-    this.#inTransaction = false
+    this.#commitMgr.active = false
+  }
+
+  #stopAutoCommit () {
+    const mgr = this.#commitMgr
+    this.#commit()
+    mgr.bouncer?.cancel()
+    mgr.dispose?.()
+    mgr.bouncer = mgr.dispose = undefined
+  }
+
+  #startAutoCommit () {
+    const mgr = this.#commitMgr
+    // defensive
+    /* c8 ignore next */
+    if (!mgr.delay) return undefined
+
+    const bouncer = (mgr.bouncer = new Bouncer({
+      every: mgr.delay,
+      leading: false,
+      fn: () => this.#commit()
+    }))
+    mgr.dispose = this.#addUpdateHook('pre', () => {
+      this.#begin()
+      bouncer.fire()
+    })
   }
 }
 

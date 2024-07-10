@@ -58,6 +58,12 @@ Calls a stored proc (realy a view with an insert trigger)
 
 Calls a single arbitrary SQL statement. Best to avoid.
 
+### .autoCommit
+
+Sets a regular bouncer period to auto-commit transactions.
+Any `update` will start a transaction, which will commit `ms` milliseconds
+later. Subsequent updates can be made, with the datbaase committing periodically.
+
 ### transaction(function)
 
 Calls the specified function inside a sync transaction, coping with
@@ -68,6 +74,8 @@ rollbacks as needed.
 Calls the specified async function, committing regularly every `ms` milliseconds.
 
 Any failure will only rollbaack to the last commit.
+
+This is just a wrapper around setting `.autoCommit`
 
 ### notify(callback) => disposeFunction
 
