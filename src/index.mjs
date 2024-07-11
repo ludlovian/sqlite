@@ -5,10 +5,15 @@ import Bouncer from '@ludlovian/bouncer'
 import sqlmin from './sqlmin.mjs'
 
 export default class Database {
+  static statementCacheSize = 10
   #db
-  #stmts = {}
-  #updateStmts = {}
-  #readStmts = {}
+
+  // statement and SQL caches
+  #stmtCache = new Map()
+  #updateSQL = {}
+  #readSQL = {}
+
+  // commit management
   #commitMgr = {
     delay: 0,
     active: 0,
@@ -16,6 +21,7 @@ export default class Database {
     bouncer: undefined
   }
 
+  // hook management
   #handler = { pre: undefined, post: undefined }
   #hooks = { pre: [], post: [] }
 
@@ -137,42 +143,50 @@ export default class Database {
   #getReadStmt (name, parms = {}) {
     const cols = Object.keys(parms)
     const key = [name, ...cols].join(',')
-    let stmt = this.#readStmts[key]
-    if (stmt) return stmt
-    let sql = `select * from ${name}`
-    if (cols.length) {
-      sql += ' where ' + cols.map(col => `${col}=:${col}`).join(' and ')
+    let sql = this.#readSQL[key]
+    if (!sql) {
+      sql = `select * from ${name}`
+      if (cols.length) {
+        sql += ' where ' + cols.map(col => `${col}=$${col}`).join(' and ')
+      }
+      this.#readSQL[key] = sql
     }
-    stmt = this.#readStmts[key] = this.#getStmt(sql)
-    return stmt
+    return this.#getStmt(sql)
   }
 
   #getUpdateStmt (name) {
-    let stmt = this.#updateStmts[name]
-    if (stmt) return stmt
-    const colStmt = this.#getStmt(
-      "select name from pragma_table_info(?) where name != 'unused' order by cid"
-    )
-    const cols = colStmt.all(name).map(({ name }) => name)
-    let sql
-    if (cols.length) {
-      sql =
-        `insert into ${name}(` +
-        cols.join(',') +
-        ')values(' +
-        cols.map(col => ':' + col) +
-        ')'
-    } else {
-      sql = `insert into ${name} values(null)`
+    let sql = this.#updateSQL[name]
+    if (!sql) {
+      const pragmaSQL =
+        "select name from pragma_table_info($name) where name not in('unused','0') order by cid"
+      const stmt = this.#getStmt(pragmaSQL)
+      const cols = stmt.all({ name }).map(c => c.name)
+      if (cols.length) {
+        sql =
+          `insert into ${name}(${cols.join(',')})` +
+          `values(${cols.map(col => '$' + col).join(',')})`
+      } else {
+        sql = `insert into ${name} values(null)`
+      }
+      this.#updateSQL[name] = sql
     }
-    stmt = this.#updateStmts[name] = this.#getStmt(sql)
-    return stmt
+    return this.#getStmt(sql)
   }
 
   #getStmt (sql) {
-    let stmt = this.#stmts[sql]
-    if (stmt) return stmt
-    stmt = this.#stmts[sql] = this.#db.prepare(sql)
+    const cache = this.#stmtCache
+    let stmt = cache.get(sql)
+    if (stmt) {
+      // delete and re-add to put it at the top of MRU list
+      cache.delete(sql)
+      cache.set(sql, stmt)
+    } else {
+      stmt = this.#db.prepare(sql)
+      cache.set(sql, stmt)
+      if (cache.size > Database.statementCacheSize) {
+        cache.delete(cache.keys().next().value)
+      }
+    }
     return stmt
   }
 
