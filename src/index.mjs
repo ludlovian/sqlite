@@ -5,11 +5,9 @@ import Bouncer from '@ludlovian/bouncer'
 import sqlmin from './sqlmin.mjs'
 
 export default class Database {
-  static statementCacheSize = 10
   #db
 
   // statement and SQL caches
-  #stmtCache = new Map()
   #updateSQL = {}
   #readSQL = {}
 
@@ -22,7 +20,6 @@ export default class Database {
   }
 
   // hook management
-  #handler = { pre: undefined, post: undefined }
   #hooks = { pre: [], post: [] }
 
   // --------------------------------------------------------------
@@ -39,7 +36,7 @@ export default class Database {
       this.#db.exec(sqlmin(runtimeDDL))
     }
     if (checkSchema) {
-      const schema = this.read('_Schema')
+      const schema = this.get('_Schema')
       if (schema?.version !== checkSchema) {
         throw new Error('Invalid schema: ' + file)
       }
@@ -81,26 +78,36 @@ export default class Database {
     }
   }
 
-  update (name, ...parms) {
-    this.#handler.pre && this.#handler.pre(name, ...parms)
-    const stmt = this.#getUpdateStmt(name)
+  update (nameOrSQL, ...parms) {
+    this.#hook('pre', nameOrSQL, ...parms)
+    const sql = this.#getUpdateSQL(nameOrSQL)
+    const stmt = this.#getStmt(sql)
     stmt.run(...parms)
-    this.#handler.post && this.#handler.post(name, ...parms)
+    this.#hook('post', nameOrSQL, ...parms)
   }
 
-  read (name, ...parms) {
-    const stmt = this.#getReadStmt(name, ...parms)
+  get_ (nameOrSQL, ...parms) {
+    const sql = this.#getReadSQL(nameOrSQL, ...parms)
+    const stmt = this.#getStmt(sql)
     return stmt.get(...parms)
   }
 
-  readAll (name, ...parms) {
-    const stmt = this.#getReadStmt(name, ...parms)
+  all (nameOrSQL, ...parms) {
+    const sql = this.#getReadSQL(nameOrSQL, ...parms)
+    const stmt = this.#getStmt(sql)
     return stmt.all(...parms)
   }
 
   exec (sql, ...parms) {
     const stmt = this.#getStmt(sql)
     stmt.run(...parms)
+  }
+
+  prepare (sql) {
+    const stmt = this.#getStmt(sql)
+    return new Stmt(stmt, {
+      hook: this.#hook.bind(this)
+    })
   }
 
   transaction (fn) {
@@ -140,21 +147,26 @@ export default class Database {
   // --------------------------------------------------------------
   // Internal - Statement management
 
-  #getReadStmt (name, parms = {}) {
+  #getReadSQL (nameOrSQL, parms = {}) {
+    if (nameOrSQL.indexOf(' ') >= 0) return nameOrSQL
+    const name = nameOrSQL
     const cols = Object.keys(parms)
     const key = [name, ...cols].join(',')
     let sql = this.#readSQL[key]
     if (!sql) {
       sql = `select * from ${name}`
       if (cols.length) {
-        sql += ' where ' + cols.map(col => `${col}=$${col}`).join(' and ')
+        const where = cols.map(col => `${col}=$${col}`).join(' and ')
+        sql += ` where ${where}`
       }
       this.#readSQL[key] = sql
     }
-    return this.#getStmt(sql)
+    return sql
   }
 
-  #getUpdateStmt (name) {
+  #getUpdateSQL (nameOrSQL) {
+    if (nameOrSQL.indexOf(' ') >= 0) return nameOrSQL
+    const name = nameOrSQL
     let sql = this.#updateSQL[name]
     if (!sql) {
       const pragmaSQL =
@@ -170,41 +182,28 @@ export default class Database {
       }
       this.#updateSQL[name] = sql
     }
-    return this.#getStmt(sql)
+    return sql
   }
 
   #getStmt (sql) {
-    const cache = this.#stmtCache
-    let stmt = cache.get(sql)
-    if (stmt) {
-      // delete and re-add to put it at the top of MRU list
-      cache.delete(sql)
-      cache.set(sql, stmt)
-    } else {
-      stmt = this.#db.prepare(sql)
-      cache.set(sql, stmt)
-      if (cache.size > Database.statementCacheSize) {
-        cache.delete(cache.keys().next().value)
-      }
-    }
-    return stmt
+    // we could cache here, but lets not unless theres a problem
+    return this.#db.prepare(sql)
   }
 
   // --------------------------------------------------------------
   // Internal - Update hooks
+  #hook (type, ...args) {
+    if (!this.#hooks[type].length) return
+    this.#hooks[type].forEach(fn => fn(...args))
+  }
 
   #addUpdateHook (type, hookFn) {
     this.#hooks[type].push(hookFn)
-    if (!this.#handler[type]) {
-      this.#handler[type] = (...args) =>
-        this.#hooks[type].forEach(fn => fn(...args))
-    }
     return () => this.#removeUpdateHook(type, hookFn)
   }
 
   #removeUpdateHook (type, hookFn) {
     this.#hooks[type] = this.#hooks[type].filter(fn => fn !== hookFn)
-    if (!this.#hooks[type].length) this.#handler[type] = undefined
   }
 
   // --------------------------------------------------------------
@@ -255,6 +254,28 @@ export default class Database {
     })
   }
 }
+Database.prototype.get = Database.prototype.get_
 
-Database.prototype.get = Database.prototype.read
-Database.prototype.all = Database.prototype.readAll
+class Stmt {
+  #stmt
+  #hook
+  constructor (stmt, { hook }) {
+    this.#stmt = stmt
+    this.#hook = hook
+  }
+
+  get_ (...parms) {
+    return this.#stmt.get(...parms)
+  }
+
+  all (...parms) {
+    return this.#stmt.all(...parms)
+  }
+
+  run (...parms) {
+    this.#hook('pre', this.#stmt.source, ...parms)
+    this.#stmt.run(...parms)
+    this.#hook('post', this.#stmt.source, ...parms)
+  }
+}
+Stmt.prototype.get = Stmt.prototype.get_

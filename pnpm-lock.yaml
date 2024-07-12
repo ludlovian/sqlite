@@ -13,7 +13,7 @@ importers:
         version: https://codeload.github.com/ludlovian/bouncer/tar.gz/72617e7f6e5380acc917f58796e7a230d261d672
     devDependencies:
       better-sqlite3:
-        specifier: ^11.1.2
+        specifier: '>7.0.0'
         version: 11.1.2
 
 packages:

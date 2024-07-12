@@ -37,31 +37,41 @@ Are we in a transaction (managed by us)
 
 Closes the database.
 
-### read(viewName, whereParams) => record
+### get(view|sql, params) => record
 
-Selects the first row from a named view. The where params if given are an object.
-Also synonymed to `.get`
+Selects the first row from the given view, or sql, after applying the
+params
+
+The sql can be given as an SQL string, or simply a view/table name which
+will use the given params as WHERE conditions.
 
 Returns an object, or null-ish
 
-### readAll(viewName, whereParams) => [record]
+### all(view|sql, params) => [record]
 
-Like `.read` but gets all the rows as an array.
+Like `.get` but gets all the rows as an array.
 
-Synonym with `.all`
+### update(storedProc|sql, params)
 
-### update(spName, params)
+Updates by calling a stored proc (inserting a row).
 
-Calls a stored proc (realy a view with an insert trigger)
+If SQL is given, rather than a view/table name, then it simply
+executes it with the bound parameters given
+
+### prepare(sql)
+
+Prepares a statement.
+Returns something you can call `.get`, `.all`. or `.run` on.
 
 ### exec(sql)
 
-Calls a single arbitrary SQL statement. Best to avoid.
+Calls a single arbitrary SQL statement. Bypasses any update or
+autocommit processing.
 
 ### .autoCommit
 
 Sets a regular bouncer period to auto-commit transactions.
-Any `update` will start a transaction, which will commit `ms` milliseconds
+Any `db.update` or `stmt.run` will start a transaction, which will commit `ms` milliseconds
 later. Subsequent updates can be made, with the datbaase committing periodically.
 
 ### transaction(function)
@@ -79,4 +89,4 @@ This is just a wrapper around setting `.autoCommit`
 
 ### notify(callback) => disposeFunction
 
-Sets up notification - after every `update`.
+Sets up notification - after every `update` or `stmt.run`
