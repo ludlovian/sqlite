@@ -1,6 +1,6 @@
 {
   "name": "@ludlovian/sqlite",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "My sqlite access",
   "type": "module",
   "main": "src/index.mjs",
