@@ -39,7 +39,7 @@ export default class Database {
       this.#db.exec(sqlmin(runtimeDDL))
     }
     if (checkSchema) {
-      const schema = this.get('_Schema')
+      const schema = this.get('schema')
       if (schema?.version !== checkSchema) {
         throw new Error('Invalid schema: ' + file)
       }

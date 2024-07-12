@@ -11,8 +11,8 @@ suite('sqlite', { concurrency: false }, () => {
   before(() => {
     execSync(`rm -f ${dbFile}`)
     const ddl = `
-      create table _Schema (id integer primary key, version integer);
-      insert or replace into _Schema values(0, 1);
+      create table schema (id integer primary key, version integer);
+      insert or replace into schema values(0, 1);
 
       create table foo (bar integer, baz);
       create table foobar (unused);
@@ -244,7 +244,7 @@ suite('sqlite', { concurrency: false }, () => {
   })
 
   test('bad schema', () => {
-    const runtimeDDL = 'update _schema set version=17'
+    const runtimeDDL = 'update schema set version=17'
     assert.throws(
       () =>
         new Database(dbFile, {
