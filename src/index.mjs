@@ -6,6 +6,8 @@ import sqlmin from './sqlmin.mjs'
 
 export default class Database {
   #db
+  file
+  #boundClose
 
   // statement and SQL caches
   #updateSQL = {}
@@ -26,6 +28,7 @@ export default class Database {
   // Construction
 
   constructor (file, { createDDL, runtimeDDL, checkSchema } = {}) {
+    this.file = file
     const realFile = !!file && !file.startsWith(':')
     const fileExists = realFile && fs.existsSync(file)
     this.#db = new SQLite3Database(file)
@@ -41,8 +44,8 @@ export default class Database {
         throw new Error('Invalid schema: ' + file)
       }
     }
-    this.close = this.close.bind(this)
-    process.on('exit', this.close)
+    this.#boundClose = this.close.bind(this)
+    process.on('exit', this.#boundClose)
   }
 
   // --------------------------------------------------------------
@@ -71,14 +74,14 @@ export default class Database {
   // Public API
 
   close () {
-    process.removeListener('exit', this.close)
+    process.removeListener('exit', this.#boundClose)
     if (this.#db && this.#db.open) {
       this.#commit()
       this.#db.close()
     }
   }
 
-  update (nameOrSQL, ...parms) {
+  run (nameOrSQL, ...parms) {
     this.#hook('pre', nameOrSQL, ...parms)
     const sql = this.#getUpdateSQL(nameOrSQL)
     const stmt = this.#getStmt(sql)
@@ -142,6 +145,12 @@ export default class Database {
 
   notify (fn) {
     return this.#addUpdateHook('post', fn)
+  }
+
+  trackChanges (table, { dest = 'changes', schema = 'temp' } = {}) {
+    const colsSQL = 'select name from pragma_table_info(?) order by cid'
+    const cols = this.all(colsSQL, table).map(c => c.name)
+    this.#db.exec(createTrackChangeSQL(table, cols, dest, schema))
   }
 
   // --------------------------------------------------------------
@@ -279,3 +288,35 @@ class Stmt {
   }
 }
 Stmt.prototype.get = Stmt.prototype.get_
+
+function createTrackChangeSQL (table, cols, dest, schema) {
+  const makeRow = pfx => {
+    return [
+      'json_object(',
+      cols.map(col => `'${col}',${pfx}.${col}`).join(','),
+      ')'
+    ].join('')
+  }
+
+  return [
+    // insert trigger
+    `create trigger if not exists ${schema}.${table}_trk_ins `,
+    `after insert on ${table} begin `,
+    `insert into ${dest} values`,
+    `(null,'${table}',0,${makeRow('new')},julianday())`,
+    ';end;',
+    // update trigger
+    `create trigger if not exists ${schema}.${table}_trk_upd `,
+    `after update on ${table} begin `,
+    `insert into ${dest} values`,
+    `(null,'${table}',1,${makeRow('old')},julianday()),`,
+    `(null,'${table}',2,${makeRow('new')},julianday())`,
+    ';end;',
+    // delete trigger
+    `create trigger if not exists ${schema}.${table}_trk_del `,
+    `after delete on ${table} begin `,
+    `insert into ${dest} values`,
+    `(null,'${table}',3,${makeRow('old')},julianday())`,
+    ';end;'
+  ].join('')
+}

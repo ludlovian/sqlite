@@ -14,7 +14,7 @@ suite('sqlite', { concurrency: false }, () => {
       create table _Schema (id integer primary key, version integer);
       insert or replace into _Schema values(0, 1);
 
-      create table foo (bar, baz);
+      create table foo (bar integer, baz);
       create table foobar (unused);
       create view boofar(bar,baz) as
         select 12, 'fizz' union all select 13, 'buzz';
@@ -54,8 +54,8 @@ suite('sqlite', { concurrency: false }, () => {
   test('update by inserting', () => {
     db.exec('begin transaction')
 
-    db.update('foo', { bar: 12, baz: 'fizz' })
-    db.update('foo', { bar: 13, baz: 'buzz' })
+    db.run('foo', { bar: 12, baz: 'fizz' })
+    db.run('foo', { bar: 13, baz: 'buzz' })
 
     const exp = [
       { bar: 12, baz: 'fizz' },
@@ -71,7 +71,7 @@ suite('sqlite', { concurrency: false }, () => {
   test('update by inserting to non-parameter view', () => {
     db.exec('begin transaction')
 
-    db.update('foobar')
+    db.run('foobar')
     const exp = { unused: null }
     const act = db.get('foobar')
     assert.deepStrictEqual(act, exp)
@@ -114,8 +114,8 @@ suite('sqlite', { concurrency: false }, () => {
     db.exec('begin transaction')
     const sql = 'insert into foo(bar, baz) values($bar, $baz)'
 
-    db.update(sql, { bar: 12, baz: 'fizz' })
-    db.update(sql, { bar: 13, baz: 'buzz' })
+    db.run(sql, { bar: 12, baz: 'fizz' })
+    db.run(sql, { bar: 13, baz: 'buzz' })
 
     const exp = [
       { bar: 12, baz: 'fizz' },
@@ -130,13 +130,13 @@ suite('sqlite', { concurrency: false }, () => {
 
   test('sync transactions', () => {
     const result = db.transaction(() => {
-      db.update('foo', { bar: 12, baz: 'fizz' })
+      db.run('foo', { bar: 12, baz: 'fizz' })
       assert(db._inTransaction)
       db.transaction(() => {
-        db.update('foo', { bar: 13, baz: 'buzz' })
+        db.run('foo', { bar: 13, baz: 'buzz' })
         assert(db._inTransaction)
       })
-      db.update('foo', { bar: 14, baz: 'bozz' })
+      db.run('foo', { bar: 14, baz: 'bozz' })
       assert(db._inTransaction)
 
       const count = db.all('foo').length
@@ -153,15 +153,15 @@ suite('sqlite', { concurrency: false }, () => {
 
   test('async transactions', async () => {
     const result = await db.asyncTransaction(250, async () => {
-      db.update('foo', { bar: 12, baz: 'fizz' })
+      db.run('foo', { bar: 12, baz: 'fizz' })
       assert(db._inTransaction)
       await db.asyncTransaction(1000, async () => {
-        db.update('foo', { bar: 13, baz: 'buzz' })
+        db.run('foo', { bar: 13, baz: 'buzz' })
       })
       assert(db._inTransaction)
       await sleep(300)
       assert(!db._inTransaction)
-      db.update('foo', { bar: 14, baz: 'bozz' })
+      db.run('foo', { bar: 14, baz: 'bozz' })
       assert(db._inTransaction)
 
       const count = db.all('foo').length
@@ -180,7 +180,7 @@ suite('sqlite', { concurrency: false }, () => {
     assert.throws(
       () =>
         db.transaction(() => {
-          db.update('foo', { bar: 12, baz: 'fizz' })
+          db.run('foo', { bar: 12, baz: 'fizz' })
           throw new Error('foobar')
         }),
       /foobar/
@@ -193,7 +193,7 @@ suite('sqlite', { concurrency: false }, () => {
   test('async transaction fails', async () => {
     await assert.rejects(
       db.asyncTransaction(500, async () => {
-        db.update('foo', { bar: 12, baz: 'fizz' })
+        db.run('foo', { bar: 12, baz: 'fizz' })
         assert(db._inTransaction)
         await sleep(10)
         throw new Error('foobar')
@@ -211,8 +211,8 @@ suite('sqlite', { concurrency: false }, () => {
       const onUpdate = (...args) => calls.push(args)
       const remove = db.notify(onUpdate)
 
-      db.update('foo', { bar: 12, baz: 'fizz' })
-      db.update('foo', { bar: 13, baz: 'buzz' })
+      db.run('foo', { bar: 12, baz: 'fizz' })
+      db.run('foo', { bar: 13, baz: 'buzz' })
 
       const exp = [
         ['foo', { bar: 12, baz: 'fizz' }],
@@ -229,12 +229,12 @@ suite('sqlite', { concurrency: false }, () => {
     db.autoCommit = 500 // do it again
     db.autoCommit = 250 // and change it
 
-    db.update('foo', { bar: 12, baz: 'fizz' })
+    db.run('foo', { bar: 12, baz: 'fizz' })
 
     assert(db._inTransaction)
 
-    db.update('foo', { bar: 13, baz: 'buzz' })
-    db.update('foo', { bar: 14, baz: 'bozz' })
+    db.run('foo', { bar: 13, baz: 'buzz' })
+    db.run('foo', { bar: 14, baz: 'bozz' })
     db.exec('delete from foo')
 
     assert(db._inTransaction)
@@ -253,5 +253,33 @@ suite('sqlite', { concurrency: false }, () => {
         }),
       /Invalid schema/
     )
+  })
+
+  test('trackChanges', () => {
+    let sql
+    sql =
+      'create table changes(id integer primary key autoincrement,name,type,row,jd)'
+    db.exec(sql)
+    db.trackChanges('foo')
+
+    sql = 'insert into foo(bar,baz) values($bar,$baz)'
+    db.run(sql, { bar: 12, baz: 'fizz' })
+
+    sql = 'update foo set baz=$newBaz where bar=$bar'
+    db.run(sql, { bar: 12, baz: 'fizz', newBaz: 'bozz' })
+
+    sql = 'delete from foo where bar=$bar'
+    db.run(sql, { bar: 12 })
+
+    sql = 'select name,type,row from changes order by id'
+    const act = db.all(sql)
+
+    const exp = [
+      { name: 'foo', type: 0, row: '{"bar":12,"baz":"fizz"}' },
+      { name: 'foo', type: 1, row: '{"bar":12,"baz":"fizz"}' },
+      { name: 'foo', type: 2, row: '{"bar":12,"baz":"bozz"}' },
+      { name: 'foo', type: 3, row: '{"bar":12,"baz":"bozz"}' }
+    ]
+    assert.deepStrictEqual(act, exp)
   })
 })

@@ -25,6 +25,8 @@ On creation you can offer the following
 
 Any DDL used is prettied before being run
 
+---
+
 ### ._db
 
 Gives you access to the underlying `better-sqlite3` database.
@@ -51,7 +53,7 @@ Returns an object, or null-ish
 
 Like `.get` but gets all the rows as an array.
 
-### update(storedProc|sql, params)
+### run(storedProc|sql, params)
 
 Updates by calling a stored proc (inserting a row).
 
@@ -71,7 +73,7 @@ autocommit processing.
 ### .autoCommit
 
 Sets a regular bouncer period to auto-commit transactions.
-Any `db.update` or `stmt.run` will start a transaction, which will commit `ms` milliseconds
+Any `db.run` or `stmt.run` will start a transaction, which will commit `ms` milliseconds
 later. Subsequent updates can be made, with the datbaase committing periodically.
 
 ### transaction(function)
@@ -89,4 +91,27 @@ This is just a wrapper around setting `.autoCommit`
 
 ### notify(callback) => disposeFunction
 
-Sets up notification - after every `update` or `stmt.run`
+Sets up notification - after every `db.run` or `stmt.run`
+
+### trackChanges(table, { dest = 'changes', schema = 'temp' ))
+
+Adds triggers to track inserts/changes/deletes to a table
+
+These changes are added to the `dest` table, which should already exist
+
+The triggers are created in the temp schema, unless you say otherwise
+
+The changes table should be created with the following structure:
+```sql
+CREATE TABLE changes (
+  id    INTEGER PRIMARY KEY AUTOINCREMENT,
+  name  TEXT NOT NULL,        -- table name
+  type  INTEGER NOT NULL,     -- 0 = new insert values
+                              -- 1 = pre-update values
+                              -- 2 = post-update values
+                              -- 3 = deleted values
+  row   TEXT,                 -- JSON row,
+  tm    REAL                  -- Julian date of update
+)
+```
+
