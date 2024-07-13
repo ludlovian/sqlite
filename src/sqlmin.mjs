@@ -11,9 +11,5 @@ export default function sqlmin (sql) {
       .join(' ')
       // remove multiple spaces
       .replace(/  +/g, ' ')
-      // remove spaces between words and non-words
-      // but not if the non-words were quotes of either kind
-      .replace(/(\w) +([^a-zA-Z0-9_'"])/g, '$1$2')
-      .replace(/([^a-zA-Z0-9_'"]) +(\w)/g, '$1$2')
   )
 }
