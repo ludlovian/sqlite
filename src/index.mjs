@@ -166,7 +166,7 @@ export default class Database {
   // Internal - Statement management
 
   #getReadSQL (nameOrSQL, parms = {}) {
-    if (nameOrSQL.indexOf(' ') >= 0) return nameOrSQL
+    if (nameOrSQL.indexOf(' ') >= 0) return sqlmin(nameOrSQL)
     const name = nameOrSQL
     const cols = Object.keys(parms)
     const key = [name, ...cols].join(',')
@@ -183,7 +183,7 @@ export default class Database {
   }
 
   #getUpdateSQL (nameOrSQL) {
-    if (nameOrSQL.indexOf(' ') >= 0) return nameOrSQL
+    if (nameOrSQL.indexOf(' ') >= 0) return sqlmin(nameOrSQL)
     const name = nameOrSQL
     let sql = this.#updateSQL[name]
     if (!sql) {
