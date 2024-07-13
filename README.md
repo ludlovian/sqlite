@@ -115,3 +115,7 @@ CREATE TABLE changes (
 )
 ```
 
+### createProcedure(name, [args], sql)
+
+Create a stored procedure (a view with a trigger).
+Args must be given as an array, even if empty.

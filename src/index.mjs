@@ -1,3 +1,4 @@
+import assert from 'node:assert'
 import process from 'node:process'
 import fs from 'node:fs'
 import SQLite3Database from 'better-sqlite3'
@@ -101,9 +102,8 @@ export default class Database {
     return stmt.all(...parms)
   }
 
-  exec (sql, ...parms) {
-    const stmt = this.#getStmt(sql)
-    stmt.run(...parms)
+  exec (sql) {
+    this.#db.exec(sqlmin(sql))
   }
 
   prepare (sql) {
@@ -151,6 +151,15 @@ export default class Database {
     const colsSQL = 'select name from pragma_table_info(?) order by cid'
     const cols = this.all(colsSQL, table).map(c => c.name)
     this.#db.exec(createTrackChangeSQL(table, cols, dest, schema))
+  }
+
+  createProcedure (name, args, sql) {
+    if (!name.includes('.')) name = 'temp.' + name
+    assert(Array.isArray(args))
+    if (!args.length) args = ['unused']
+    sql = sqlmin(sql)
+    if (!sql.endsWith(';')) sql += ';'
+    this.#db.exec(createProcedureSQL(name, args, sql))
   }
 
   // --------------------------------------------------------------
@@ -318,5 +327,14 @@ function createTrackChangeSQL (table, cols, dest, schema) {
     `insert into ${dest} values`,
     `(null,'${table}',3,${makeRow('old')},julianday())`,
     ';end;'
+  ].join('')
+}
+
+function createProcedureSQL (name, args, sql) {
+  return [
+    `create view if not exists ${name}(${args.join(',')}) as `,
+    `select ${args.map(() => '0').join(',')} where 0;`,
+    `create trigger ${name}_sproc instead of insert on ${name} `,
+    `begin ${sql}end;`
   ].join('')
 }

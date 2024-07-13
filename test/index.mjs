@@ -255,6 +255,31 @@ suite('sqlite', { concurrency: false }, () => {
     )
   })
 
+  test('createProcedure', () => {
+    db.transaction(() => {
+      let sql
+      sql = `
+        insert into foo(bar, baz) values(new.bar, 'fizz');
+        insert into foo(bar, baz) values(13, 'buzz');
+      `
+      db.createProcedure('addFoo', ['bar'], sql)
+
+      db.createProcedure('clearFoo', [], 'delete from foo')
+
+      sql = 'select * from foo'
+      const exp = [
+        { bar: 12, baz: 'fizz' },
+        { bar: 13, baz: 'buzz' }
+      ]
+
+      db.run('addFoo', { bar: 12 })
+
+      const act = db.all(sql)
+      assert.deepStrictEqual(act, exp)
+      db.run('clearFoo')
+    })
+  })
+
   test('trackChanges', () => {
     let sql
     sql =
