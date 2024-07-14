@@ -34,10 +34,10 @@ export default class Database {
     const fileExists = realFile && fs.existsSync(file)
     this.#db = new SQLite3Database(file)
     if (realFile && createDDL && !fileExists) {
-      this.#db.exec(sqlmin(createDDL))
+      this.exec(createDDL)
     }
     if (runtimeDDL) {
-      this.#db.exec(sqlmin(runtimeDDL))
+      this.exec(runtimeDDL)
     }
     if (checkSchema) {
       const schema = this.get('schema')
@@ -85,32 +85,56 @@ export default class Database {
   run (nameOrSQL, ...parms) {
     this.#hook('pre', nameOrSQL, ...parms)
     const sql = this.#getUpdateSQL(nameOrSQL)
-    const stmt = this.#getStmt(sql)
-    stmt.run(...parms)
-    this.#hook('post', nameOrSQL, ...parms)
+    try {
+      const stmt = this.#getStmt(sql)
+      stmt.run(...parms)
+      this.#hook('post', nameOrSQL, ...parms)
+    } catch (err) {
+      console.error('sqlite:run', nameOrSQL, ...parms)
+      throw err
+    }
   }
 
   get_ (nameOrSQL, ...parms) {
     const sql = this.#getReadSQL(nameOrSQL, ...parms)
-    const stmt = this.#getStmt(sql)
-    return stmt.get(...parms)
+    try {
+      const stmt = this.#getStmt(sql)
+      return stmt.get(...parms)
+    } catch (err) {
+      console.error('sqlite:get', nameOrSQL, ...parms)
+      throw err
+    }
   }
 
   all (nameOrSQL, ...parms) {
     const sql = this.#getReadSQL(nameOrSQL, ...parms)
-    const stmt = this.#getStmt(sql)
-    return stmt.all(...parms)
+    try {
+      const stmt = this.#getStmt(sql)
+      return stmt.all(...parms)
+    } catch (err) {
+      console.error('sqlite.all', nameOrSQL, ...parms)
+      throw err
+    }
   }
 
   exec (sql) {
-    this.#db.exec(sqlmin(sql))
+    try {
+      this.#db.exec(sqlmin(sql))
+    } catch (err) {
+      console.error('sqlite:exec', sql)
+    }
   }
 
   prepare (sql) {
-    const stmt = this.#getStmt(sql)
-    return new Stmt(stmt, {
-      hook: this.#hook.bind(this)
-    })
+    try {
+      const stmt = this.#getStmt(sql)
+      return new Stmt(stmt, {
+        hook: this.#hook.bind(this)
+      })
+    } catch (err) {
+      console.error('sqlite:prepare', sql)
+      throw err
+    }
   }
 
   transaction (fn) {
