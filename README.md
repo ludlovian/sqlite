@@ -106,14 +106,20 @@ The changes table should be created with the following structure:
 CREATE TABLE changes (
   id     INTEGER PRIMARY KEY AUTOINCREMENT,
   name   TEXT NOT NULL,        -- table name
-  key    TEXT,                 -- the row key in JSON
   before TEXT,                 -- the before row data in JSON
-                               --   (NULL for inserts)
   after  TEXT,                 -- the after row data in JSON
-                               --   (NULL for deletes)
   tm     REAL                  -- Julian date of update
 )
 ```
+
+For `INSERT`s, the `before` column is null, and the `after` is a JSON version
+of the new row.
+
+For `DELETE`s it's the other way around - the old row is in `before`, and `after` is null.
+
+For `UPDATE`s, the `before` column will hold all the columns in the primary key.
+Plus the before version of any other columns that have changed.
+The updated values of those columns are in the `after` column.
 
 ### createProcedure(name, [args], sql)
 
