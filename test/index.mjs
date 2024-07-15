@@ -14,7 +14,7 @@ suite('sqlite', { concurrency: false }, () => {
       create table schema (id integer primary key, version integer);
       insert or replace into schema values(0, 1);
 
-      create table foo (bar integer, baz);
+      create table foo (bar integer primary key, baz);
       create table foobar (unused);
       create view boofar(bar,baz) as
         select 12, 'fizz' union all select 13, 'buzz';
@@ -282,8 +282,16 @@ suite('sqlite', { concurrency: false }, () => {
 
   test('trackChanges', () => {
     let sql
-    sql =
-      'create table changes(id integer primary key autoincrement,name,type,row,jd)'
+    sql = `
+      create table changes(
+        id integer primary key autoincrement,
+        name,
+        "key",
+        before,
+        after,
+        updated
+      )
+    `
     db.exec(sql)
     db.trackChanges('foo')
 
@@ -296,14 +304,18 @@ suite('sqlite', { concurrency: false }, () => {
     sql = 'delete from foo where bar=$bar'
     db.run(sql, { bar: 12 })
 
-    sql = 'select name,type,row from changes order by id'
+    sql = 'select name,"key",before,after from changes order by id'
     const act = db.all(sql)
 
     const exp = [
-      { name: 'foo', type: 0, row: '{"bar":12,"baz":"fizz"}' },
-      { name: 'foo', type: 1, row: '{"bar":12,"baz":"fizz"}' },
-      { name: 'foo', type: 2, row: '{"bar":12,"baz":"bozz"}' },
-      { name: 'foo', type: 3, row: '{"bar":12,"baz":"bozz"}' }
+      { name: 'foo', key: '{"bar":12}', before: null, after: '{"baz":"fizz"}' },
+      {
+        name: 'foo',
+        key: '{"bar":12}',
+        before: '{"baz":"fizz"}',
+        after: '{"baz":"bozz"}'
+      },
+      { name: 'foo', key: '{"bar":12}', before: '{"baz":"bozz"}', after: null }
     ]
     assert.deepStrictEqual(act, exp)
   })

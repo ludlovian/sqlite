@@ -104,14 +104,14 @@ The triggers are created in the temp schema, unless you say otherwise
 The changes table should be created with the following structure:
 ```sql
 CREATE TABLE changes (
-  id    INTEGER PRIMARY KEY AUTOINCREMENT,
-  name  TEXT NOT NULL,        -- table name
-  type  INTEGER NOT NULL,     -- 0 = new insert values
-                              -- 1 = pre-update values
-                              -- 2 = post-update values
-                              -- 3 = deleted values
-  row   TEXT,                 -- JSON row,
-  tm    REAL                  -- Julian date of update
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  name   TEXT NOT NULL,        -- table name
+  key    TEXT,                 -- the row key in JSON
+  before TEXT,                 -- the before row data in JSON
+                               --   (NULL for inserts)
+  after  TEXT,                 -- the after row data in JSON
+                               --   (NULL for deletes)
+  tm     REAL                  -- Julian date of update
 )
 ```
 

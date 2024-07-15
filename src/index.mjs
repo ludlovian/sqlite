@@ -89,10 +89,13 @@ export default class Database {
       const stmt = this.#getStmt(sql)
       stmt.run(...parms)
       this.#hook('post', nameOrSQL, ...parms)
+    // defensive
+    /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:run', nameOrSQL, ...parms)
       throw err
     }
+    /* c8 ignore stop */
   }
 
   get_ (nameOrSQL, ...parms) {
@@ -100,10 +103,13 @@ export default class Database {
     try {
       const stmt = this.#getStmt(sql)
       return stmt.get(...parms)
+    // defensive
+    /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:get', nameOrSQL, ...parms)
       throw err
     }
+    /* c8 ignore stop */
   }
 
   all (nameOrSQL, ...parms) {
@@ -111,18 +117,24 @@ export default class Database {
     try {
       const stmt = this.#getStmt(sql)
       return stmt.all(...parms)
+    // defensive
+    /* c8 ignore start */
     } catch (err) {
       console.error('sqlite.all', nameOrSQL, ...parms)
       throw err
     }
+    /* c8 ignore stop */
   }
 
   exec (sql) {
     try {
       this.#db.exec(sqlmin(sql))
+    // defensive
+    /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:exec', sql)
     }
+    /* c8 ignore stop */
   }
 
   prepare (sql) {
@@ -131,10 +143,13 @@ export default class Database {
       return new Stmt(stmt, {
         hook: this.#hook.bind(this)
       })
+    // defensive
+    /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:prepare', sql)
       throw err
     }
+    /* c8 ignore stop */
   }
 
   transaction (fn) {
@@ -172,9 +187,14 @@ export default class Database {
   }
 
   trackChanges (table, { dest = 'changes', schema = 'temp' } = {}) {
-    const colsSQL = 'select name from pragma_table_info(?) order by cid'
-    const cols = this.all(colsSQL, table).map(c => c.name)
-    this.#db.exec(createTrackChangeSQL(table, cols, dest, schema))
+    let sql
+    sql = 'select name from pragma_table_info($table) where pk > 0 order by pk'
+    const keys = this.all(sql, { table }).map(c => c.name)
+
+    sql = 'select name from pragma_table_info($table) where pk = 0'
+    const cols = this.all(sql, { table }).map(c => c.name)
+
+    this.#db.exec(createTrackChangeSQL(table, keys, cols, dest, schema))
   }
 
   createProcedure (name, args, sql) {
@@ -322,36 +342,47 @@ class Stmt {
 }
 Stmt.prototype.get = Stmt.prototype.get_
 
-function createTrackChangeSQL (table, cols, dest, schema) {
-  const makeRow = pfx => {
+function createTrackChangeSQL (table, keyCols, dataCols, dest, schema) {
+  const sql = []
+  // insert trigger
+  sql.push(
+    `create trigger if not exists ${schema}.${table}_track_ins `,
+    `after insert on ${table} begin `,
+    `insert into ${dest} values(`,
+    `null,'${table}',${makeRow('new', keyCols)},`,
+    `null,${makeRow('new', dataCols)},julianday()`,
+    ');end;'
+  )
+  // update trigger
+  sql.push(
+    `create trigger if not exists ${schema}.${table}_track_upd `,
+    `after update on ${table} begin `,
+    `insert into ${dest} values(`,
+    `null,'${table}',${makeRow('new', keyCols)},`,
+    `${makeRow('old', dataCols)},${makeRow('new', dataCols)},julianday()`,
+    ');end;'
+  )
+  // delete trigger
+  sql.push(
+    `create trigger if not exists ${schema}.${table}_track_del `,
+    `after delete on ${table} begin `,
+    `insert into ${dest} values(`,
+    `null,'${table}',${makeRow('old', keyCols)},`,
+    `${makeRow('old', dataCols)},null,julianday()`,
+    ');end;'
+  )
+  return sql.join('')
+
+  function makeRow (pfx, cols) {
+    /* c8 ignore start */
+    if (!cols.length) return 'null'
+    /* c8 ignore stop */
     return [
       'json_object(',
       cols.map(col => `'${col}',${pfx}.${col}`).join(','),
       ')'
     ].join('')
   }
-
-  return [
-    // insert trigger
-    `create trigger if not exists ${schema}.${table}_trk_ins `,
-    `after insert on ${table} begin `,
-    `insert into ${dest} values`,
-    `(null,'${table}',0,${makeRow('new')},julianday())`,
-    ';end;',
-    // update trigger
-    `create trigger if not exists ${schema}.${table}_trk_upd `,
-    `after update on ${table} begin `,
-    `insert into ${dest} values`,
-    `(null,'${table}',1,${makeRow('old')},julianday()),`,
-    `(null,'${table}',2,${makeRow('new')},julianday())`,
-    ';end;',
-    // delete trigger
-    `create trigger if not exists ${schema}.${table}_trk_del `,
-    `after delete on ${table} begin `,
-    `insert into ${dest} values`,
-    `(null,'${table}',3,${makeRow('old')},julianday())`,
-    ';end;'
-  ].join('')
 }
 
 function createProcedureSQL (name, args, sql) {
