@@ -285,10 +285,9 @@ suite('sqlite', { concurrency: false }, () => {
     sql = `
       create table changes(
         id integer primary key autoincrement,
-        name,
-        "key",
-        before,
-        after,
+        tbName,
+        preRow,
+        postRow,
         updated
       )
     `
@@ -304,18 +303,17 @@ suite('sqlite', { concurrency: false }, () => {
     sql = 'delete from foo where bar=$bar'
     db.run(sql, { bar: 12 })
 
-    sql = 'select name,"key",before,after from changes order by id'
+    sql = 'select tbName,preRow,postRow from changes order by id'
     const act = db.all(sql)
 
     const exp = [
-      { name: 'foo', key: '{"bar":12}', before: null, after: '{"baz":"fizz"}' },
+      { tbName: 'foo', preRow: null, postRow: '{"bar":12,"baz":"fizz"}' },
       {
-        name: 'foo',
-        key: '{"bar":12}',
-        before: '{"baz":"fizz"}',
-        after: '{"baz":"bozz"}'
+        tbName: 'foo',
+        preRow: '{"bar":12,"baz":"fizz"}',
+        postRow: '{"baz":"bozz"}'
       },
-      { name: 'foo', key: '{"bar":12}', before: '{"baz":"bozz"}', after: null }
+      { tbName: 'foo', preRow: '{"bar":12,"baz":"bozz"}', postRow: null }
     ]
     assert.deepStrictEqual(act, exp)
   })

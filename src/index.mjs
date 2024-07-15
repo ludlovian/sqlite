@@ -343,46 +343,48 @@ class Stmt {
 Stmt.prototype.get = Stmt.prototype.get_
 
 function createTrackChangeSQL (table, keyCols, dataCols, dest, schema) {
-  const sql = []
+  const cols = [...keyCols, ...dataCols]
+  const pk = [...keyCols.map(() => 1), ...dataCols.map(() => 0)]
+
+  let sql = []
   // insert trigger
-  sql.push(
+  sql = [
+    ...sql,
     `create trigger if not exists ${schema}.${table}_track_ins `,
     `after insert on ${table} begin `,
-    `insert into ${dest} values(`,
-    `null,'${table}',${makeRow('new', keyCols)},`,
-    `null,${makeRow('new', dataCols)},julianday()`,
-    ');end;'
-  )
-  // update trigger
-  sql.push(
-    `create trigger if not exists ${schema}.${table}_track_upd `,
-    `after update on ${table} begin `,
-    `insert into ${dest} values(`,
-    `null,'${table}',${makeRow('new', keyCols)},`,
-    `${makeRow('old', dataCols)},${makeRow('new', dataCols)},julianday()`,
-    ');end;'
-  )
+    `insert into ${dest} values(null,'${table}',null,json_object(`,
+    ...cols.map(col => `'${col}',new.${col}`).join(','),
+    '),julianday());end;'
+  ]
+
   // delete trigger
-  sql.push(
+  sql = [
+    ...sql,
     `create trigger if not exists ${schema}.${table}_track_del `,
     `after delete on ${table} begin `,
-    `insert into ${dest} values(`,
-    `null,'${table}',${makeRow('old', keyCols)},`,
-    `${makeRow('old', dataCols)},null,julianday()`,
-    ');end;'
-  )
-  return sql.join('')
+    `insert into ${dest} values(null,'${table}',json_object(`,
+    ...cols.map(col => `'${col}',old.${col}`).join(','),
+    '),null,julianday());end;'
+  ]
 
-  function makeRow (pfx, cols) {
-    /* c8 ignore start */
-    if (!cols.length) return 'null'
-    /* c8 ignore stop */
-    return [
-      'json_object(',
-      cols.map(col => `'${col}',${pfx}.${col}`).join(','),
-      ')'
-    ].join('')
-  }
+  // update trigger (the hard one)
+  sql = [
+    ...sql,
+    `create trigger if not exists ${schema}.${table}_track_upd `,
+    `after update on ${table} begin `,
+    `insert into ${dest} with chgs(col,pre,post,pk) as (values`,
+    ...cols
+      .map((col, i) => `('${col}',old.${col},new.${col},${pk[i]})`)
+      .join(','),
+    '),bef as (select json_group_object(col,pre) as obj ',
+    'from chgs where pre is not post or pk=1),',
+    'aft as (select json_group_object(col,post) as obj ',
+    'from chgs where pre is not post) ',
+    `select null,'${table}',bef.obj,aft.obj,julianday() `,
+    'from bef,aft;',
+    'end;'
+  ]
+  return sql.join('')
 }
 
 function createProcedureSQL (name, args, sql) {
