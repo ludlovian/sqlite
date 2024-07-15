@@ -89,8 +89,8 @@ export default class Database {
       const stmt = this.#getStmt(sql)
       stmt.run(...parms)
       this.#hook('post', nameOrSQL, ...parms)
-    // defensive
-    /* c8 ignore start */
+      // defensive
+      /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:run', nameOrSQL, ...parms)
       throw err
@@ -103,8 +103,8 @@ export default class Database {
     try {
       const stmt = this.#getStmt(sql)
       return stmt.get(...parms)
-    // defensive
-    /* c8 ignore start */
+      // defensive
+      /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:get', nameOrSQL, ...parms)
       throw err
@@ -117,8 +117,8 @@ export default class Database {
     try {
       const stmt = this.#getStmt(sql)
       return stmt.all(...parms)
-    // defensive
-    /* c8 ignore start */
+      // defensive
+      /* c8 ignore start */
     } catch (err) {
       console.error('sqlite.all', nameOrSQL, ...parms)
       throw err
@@ -129,8 +129,8 @@ export default class Database {
   exec (sql) {
     try {
       this.#db.exec(sqlmin(sql))
-    // defensive
-    /* c8 ignore start */
+      // defensive
+      /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:exec', sql)
     }
@@ -143,8 +143,8 @@ export default class Database {
       return new Stmt(stmt, {
         hook: this.#hook.bind(this)
       })
-    // defensive
-    /* c8 ignore start */
+      // defensive
+      /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:prepare', sql)
       throw err
