@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 import process from 'node:process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import sqlmin from '../src/sqlmin.mjs'
 
 async function main () {
-  const [inFile, outFile] = process.argv.slice(2)
+  const inFile = process.argv[2]
   const input = await readInput(inFile)
-  const output = sqlmin(input) + '\n'
-  if (!outFile || outFile === '-') {
-    process.stdout.write(output)
-  } else {
-    writeFileSync(outFile, output)
+  const lines = input.split('\n').filter(Boolean)
+  if (lines[0]?.startsWith('export')) {
+    lines.pop()
+    lines.shift()
   }
+  const output = sqlmin(lines.join('\n')) + '\n'
+  process.stdout.write(output)
 }
 
 async function readInput (inFile) {

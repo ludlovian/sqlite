@@ -8,8 +8,7 @@
     ".": "./src/index.mjs"
   },
   "bin": {
-    "sqlmin": "./bin/sqlmin.mjs",
-    "sql2mjs": "./bin/sql2mjs.mjs"
+    "sqlmin": "./bin/sqlmin.mjs"
   },
   "scripts": {
     "clean": "rm -rf coverage/ node_modules/.cache/",
