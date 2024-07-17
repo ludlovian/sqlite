@@ -93,7 +93,7 @@ This is just a wrapper around setting `.autoCommit`
 
 Sets up notification - after every `db.run` or `stmt.run`
 
-### trackChanges(table, { dest = 'changes', schema = 'temp' ))
+### trackChanges(table, { dest = 'changes', schema = 'temp', exclude ))
 
 Adds triggers to track inserts/changes/deletes to a table
 
@@ -120,6 +120,8 @@ For `DELETE`s it's the other way around - the old row is in `before`, and `after
 For `UPDATE`s, the `before` column will hold all the columns in the primary key.
 Plus the before version of any other columns that have changed.
 The updated values of those columns are in the `after` column.
+
+Any columns in `exclude` will not be included in the JSON objects
 
 ### createProcedure(name, [args], sql)
 

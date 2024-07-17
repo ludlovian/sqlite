@@ -186,13 +186,21 @@ export default class Database {
     return this.#addUpdateHook('post', fn)
   }
 
-  trackChanges (table, { dest = 'changes', schema = 'temp' } = {}) {
+  trackChanges (table, opts = {}) {
+    const { dest = 'changes', schema = 'temp' } = opts
+    if (typeof opts.exclude === 'string') {
+      opts.exclude = opts.exclude.split(',')
+    }
+    const exclude = opts.exclude ?? []
+
     let sql
     sql = 'select name from pragma_table_info($table) where pk > 0 order by pk'
     const keys = this.all(sql, { table }).map(c => c.name)
 
     sql = 'select name from pragma_table_info($table) where pk = 0'
-    const cols = this.all(sql, { table }).map(c => c.name)
+    const cols = this.all(sql, { table })
+      .map(c => c.name)
+      .filter(col => !exclude.includes(col))
 
     this.#db.exec(createTrackChangeSQL(table, keys, cols, dest, schema))
   }

@@ -316,5 +316,48 @@ suite('sqlite', { concurrency: false }, () => {
       { tbName: 'foo', preRow: '{"bar":12,"baz":"bozz"}', postRow: null }
     ]
     assert.deepStrictEqual(act, exp)
+    db.exec('drop table changes')
+  })
+
+  test('trackChanges', () => {
+    let sql
+    sql = `
+      create table changes(
+        id integer primary key autoincrement,
+        tbName,
+        preRow,
+        postRow,
+        updated
+      );
+
+      create table foo2(bar integer primary key, baz, ignore);
+    `
+    db.exec(sql)
+    db.trackChanges('foo2', { exclude: 'ignore' })
+
+    sql = 'insert into foo2(bar,baz,ignore) values($bar,$baz,1)'
+    db.run(sql, { bar: 12, baz: 'fizz' })
+
+    sql = 'update foo2 set baz=$newBaz,ignore=2 where bar=$bar'
+    db.run(sql, { bar: 12, baz: 'fizz', newBaz: 'bozz' })
+
+    sql = 'delete from foo2 where bar=$bar'
+    db.run(sql, { bar: 12 })
+
+    sql = 'select tbName,preRow,postRow from changes order by id'
+    const act = db.all(sql)
+
+    const exp = [
+      { tbName: 'foo2', preRow: null, postRow: '{"bar":12,"baz":"fizz"}' },
+      {
+        tbName: 'foo2',
+        preRow: '{"bar":12,"baz":"fizz"}',
+        postRow: '{"baz":"bozz"}'
+      },
+      { tbName: 'foo2', preRow: '{"bar":12,"baz":"bozz"}', postRow: null }
+    ]
+    assert.deepStrictEqual(act, exp)
+
+    db.exec('drop table changes;drop table foo2;')
   })
 })
