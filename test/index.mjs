@@ -360,4 +360,22 @@ suite('sqlite', { concurrency: false }, () => {
 
     db.exec('drop table changes;drop table foo2;')
   })
+
+  test('pluck', () => {
+    let exp
+    let act
+
+    exp = 12
+    act = db.pluck.get('boofar')
+    assert.deepStrictEqual(act, exp)
+
+    exp = [12, 13]
+    act = db.pluck.all('boofar')
+    assert.deepStrictEqual(act, exp)
+
+    const s = db.prepare('select * from boofar')
+    exp = [12, 13]
+    act = s.pluck.all()
+    assert.deepStrictEqual(act, exp)
+  })
 })

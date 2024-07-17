@@ -9,6 +9,7 @@ export default class Database {
   #db
   file
   #boundClose
+  #pluck
 
   // statement and SQL caches
   #updateSQL = {}
@@ -71,6 +72,11 @@ export default class Database {
     if (ms) this.#startAutoCommit()
   }
 
+  get pluck () {
+    this.#pluck = true
+    return this
+  }
+
   // --------------------------------------------------------------
   // Public API
 
@@ -101,7 +107,10 @@ export default class Database {
   get_ (nameOrSQL, ...parms) {
     const sql = this.#getReadSQL(nameOrSQL, ...parms)
     try {
-      const stmt = this.#getStmt(sql)
+      let stmt = this.#getStmt(sql)
+      if (this.#pluck) stmt = stmt.pluck()
+      this.#pluck = undefined
+
       return stmt.get(...parms)
       // defensive
       /* c8 ignore start */
@@ -115,7 +124,10 @@ export default class Database {
   all (nameOrSQL, ...parms) {
     const sql = this.#getReadSQL(nameOrSQL, ...parms)
     try {
-      const stmt = this.#getStmt(sql)
+      let stmt = this.#getStmt(sql)
+      if (this.#pluck) stmt = stmt.pluck()
+      this.#pluck = undefined
+
       return stmt.all(...parms)
       // defensive
       /* c8 ignore start */
@@ -332,6 +344,11 @@ class Stmt {
   constructor (stmt, { hook }) {
     this.#stmt = stmt
     this.#hook = hook
+  }
+
+  get pluck () {
+    this.#stmt = this.#stmt.pluck()
+    return this
   }
 
   get_ (...parms) {

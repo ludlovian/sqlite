@@ -65,6 +65,9 @@ executes it with the bound parameters given
 Prepares a statement.
 Returns something you can call `.get`, `.all`. or `.run` on.
 
+You can also call the `.pluck` attribute to make is pluck
+the first column
+
 ### exec(sql)
 
 Calls a single arbitrary SQL statement. Bypasses any update or
@@ -75,6 +78,13 @@ autocommit processing.
 Sets a regular bouncer period to auto-commit transactions.
 Any `db.run` or `stmt.run` will start a transaction, which will commit `ms` milliseconds
 later. Subsequent updates can be made, with the datbaase committing periodically.
+
+### .pluck => db
+
+Turns the next### .pluck => db
+
+Turns the next `.get` or `.all` into a plucked query, returning just the
+first column.
 
 ### transaction(function)
 
