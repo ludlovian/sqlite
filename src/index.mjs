@@ -145,6 +145,7 @@ export default class Database {
       /* c8 ignore start */
     } catch (err) {
       console.error('sqlite:exec', sql)
+      throw err
     }
     /* c8 ignore stop */
   }
