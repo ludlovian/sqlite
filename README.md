@@ -21,7 +21,7 @@ Arguments:
 On creation you can offer the following
 - `createDDL` - DDL to be run if the file is being created.
 - `runtimeDDL` - DDL to be run everytime you open it
-- `checkSchema` - if given, this will check that `version` in `_schema` matches
+- `checkSchema` - if given, this will check that `version` in `schema` matches
 
 Any DDL used is prettied before being run
 
@@ -65,7 +65,7 @@ executes it with the bound parameters given
 Prepares a statement.
 Returns something you can call `.get`, `.all`. or `.run` on.
 
-You can also call the `.pluck` attribute to make is pluck
+You can also call the `.pluck` attribute to make it pluck
 the first column
 
 ### exec(sql)
@@ -81,7 +81,7 @@ later. Subsequent updates can be made, with the datbaase committing periodically
 
 ### .pluck => db
 
-Turns the next### .pluck => db
+Turns the next .pluck => db
 
 Turns the next `.get` or `.all` into a plucked query, returning just the
 first column.
@@ -103,7 +103,7 @@ This is just a wrapper around setting `.autoCommit`
 
 Sets up notification - after every `db.run` or `stmt.run`
 
-### trackChanges(table, { dest = 'changes', schema = 'temp', exclude ))
+### trackChanges(table, { dest = 'changes', exclude ))
 
 Adds triggers to track inserts/changes/deletes to a table
 
