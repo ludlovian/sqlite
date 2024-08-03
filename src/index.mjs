@@ -200,7 +200,7 @@ export default class Database {
   }
 
   trackChanges (table, opts = {}) {
-    const { dest = 'changes', schema = 'temp' } = opts
+    const { dest = 'changes' } = opts
     if (typeof opts.exclude === 'string') {
       opts.exclude = opts.exclude.split(',')
     }
@@ -215,7 +215,7 @@ export default class Database {
       .map(c => c.name)
       .filter(col => !exclude.includes(col))
 
-    this.#db.exec(createTrackChangeSQL(table, keys, cols, dest, schema))
+    this.#db.exec(createTrackChangeSQL(table, keys, cols, dest))
   }
 
   createProcedure (name, args, sql) {
@@ -368,7 +368,7 @@ class Stmt {
 }
 Stmt.prototype.get = Stmt.prototype.get_
 
-function createTrackChangeSQL (table, keyCols, dataCols, dest, schema) {
+function createTrackChangeSQL (table, keyCols, dataCols, dest) {
   const cols = [...keyCols, ...dataCols]
   const pk = [...keyCols.map(() => 1), ...dataCols.map(() => 0)]
 
@@ -376,7 +376,7 @@ function createTrackChangeSQL (table, keyCols, dataCols, dest, schema) {
   // insert trigger
   sql = [
     ...sql,
-    `create trigger if not exists ${schema}.${table}_track_ins `,
+    `create trigger if not exists temp.${table}_track_ins `,
     `after insert on ${table} begin `,
     `insert into ${dest} values(null,'${table}',null,json_object(`,
     ...cols.map(col => `'${col}',new.${col}`).join(','),
@@ -386,7 +386,7 @@ function createTrackChangeSQL (table, keyCols, dataCols, dest, schema) {
   // delete trigger
   sql = [
     ...sql,
-    `create trigger if not exists ${schema}.${table}_track_del `,
+    `create trigger if not exists temp.${table}_track_del `,
     `after delete on ${table} begin `,
     `insert into ${dest} values(null,'${table}',json_object(`,
     ...cols.map(col => `'${col}',old.${col}`).join(','),
@@ -396,7 +396,7 @@ function createTrackChangeSQL (table, keyCols, dataCols, dest, schema) {
   // update trigger (the hard one)
   sql = [
     ...sql,
-    `create trigger if not exists ${schema}.${table}_track_upd `,
+    `create trigger if not exists temp.${table}_track_upd `,
     `after update on ${table} begin `,
     `insert into ${dest} with chgs(col,pre,post,pk) as (values`,
     ...cols
