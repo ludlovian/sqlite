@@ -319,7 +319,7 @@ suite('sqlite', { concurrency: false }, () => {
     db.exec('drop table changes')
   })
 
-  test('trackChanges', () => {
+  test('trackChanges with exclude', () => {
     let sql
     sql = `
       create table changes(
