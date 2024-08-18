@@ -103,15 +103,15 @@ This is just a wrapper around setting `.autoCommit`
 
 Sets up notification - after every `db.run` or `stmt.run`
 
-### trackChanges(table, { dest = 'changes', exclude ))
+### trackChanges(table, { type='json', dest='changes', exclude })
 
 Adds triggers to track inserts/changes/deletes to a table
 
 These changes are added to the `dest` table, which should already exist
 
-The triggers are created in the temp schema, unless you say otherwise
+There are two types: `json` and `sql`.
 
-The changes table should be created with the following structure:
+If type is `json` the changes table should have the following structure:
 ```sql
 CREATE TABLE changes (
   id     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,18 +122,11 @@ CREATE TABLE changes (
 )
 ```
 
-For `INSERT`s, the `before` column is null, and the `after` is a JSON version
-of the new row.
-
-For `DELETE`s it's the other way around - the old row is in `before`, and `after` is null.
-
-For `UPDATE`s, the `before` column will hold all the columns in the primary key.
-Plus the before version of any other columns that have changed.
-The updated values of those columns are in the `after` column.
-
-Any columns in `exclude` will not be included in the JSON objects
-
-### createProcedure(name, [args], sql)
-
-Create a stored procedure (a view with a trigger).
-Args must be given as an array, even if empty.
+and for `sql` type it should be:
+```sql
+CREATE TABLE changes (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  sql    TEXT NOT NULL,        -- the sql statement
+  tm     REAL                  -- Julian date of update
+)
+```

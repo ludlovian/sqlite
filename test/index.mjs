@@ -255,34 +255,10 @@ suite('sqlite', { concurrency: false }, () => {
     )
   })
 
-  test('createProcedure', () => {
-    db.transaction(() => {
-      let sql
-      sql = `
-        insert into foo(bar, baz) values(new.bar, 'fizz');
-        insert into foo(bar, baz) values(13, 'buzz');
-      `
-      db.createProcedure('addFoo', ['bar'], sql)
-
-      db.createProcedure('clearFoo', [], 'delete from foo')
-
-      sql = 'select * from foo'
-      const exp = [
-        { bar: 12, baz: 'fizz' },
-        { bar: 13, baz: 'buzz' }
-      ]
-
-      db.run('addFoo', { bar: 12 })
-
-      const act = db.all(sql)
-      assert.deepStrictEqual(act, exp)
-      db.run('clearFoo')
-    })
-  })
-
-  test('trackChanges', () => {
+  test('trackChanges as JSON', () => {
     let sql
     sql = `
+      create table foo2(bar integer primary key, baz);
       create table changes(
         id integer primary key autoincrement,
         tbName,
@@ -292,36 +268,37 @@ suite('sqlite', { concurrency: false }, () => {
       )
     `
     db.exec(sql)
-    db.trackChanges('foo')
+    db.trackChanges('foo2')
 
-    sql = 'insert into foo(bar,baz) values($bar,$baz)'
+    sql = 'insert into foo2(bar,baz) values($bar,$baz)'
     db.run(sql, { bar: 12, baz: 'fizz' })
 
-    sql = 'update foo set baz=$newBaz where bar=$bar'
+    sql = 'update foo2 set baz=$newBaz where bar=$bar'
     db.run(sql, { bar: 12, baz: 'fizz', newBaz: 'bozz' })
 
-    sql = 'delete from foo where bar=$bar'
+    sql = 'delete from foo2 where bar=$bar'
     db.run(sql, { bar: 12 })
 
     sql = 'select tbName,preRow,postRow from changes order by id'
     const act = db.all(sql)
 
     const exp = [
-      { tbName: 'foo', preRow: null, postRow: '{"bar":12,"baz":"fizz"}' },
+      { tbName: 'foo2', preRow: null, postRow: '{"bar":12,"baz":"fizz"}' },
       {
-        tbName: 'foo',
+        tbName: 'foo2',
         preRow: '{"bar":12,"baz":"fizz"}',
         postRow: '{"baz":"bozz"}'
       },
-      { tbName: 'foo', preRow: '{"bar":12,"baz":"bozz"}', postRow: null }
+      { tbName: 'foo2', preRow: '{"bar":12,"baz":"bozz"}', postRow: null }
     ]
     assert.deepStrictEqual(act, exp)
-    db.exec('drop table changes')
+    db.exec('drop table foo2;drop table changes')
   })
 
-  test('trackChanges with exclude', () => {
+  test('trackChanges as JSON with exclude', () => {
     let sql
     sql = `
+      create table foo2(bar integer primary key, baz, ignore);
       create table changes(
         id integer primary key autoincrement,
         tbName,
@@ -329,8 +306,6 @@ suite('sqlite', { concurrency: false }, () => {
         postRow,
         updated
       );
-
-      create table foo2(bar integer primary key, baz, ignore);
     `
     db.exec(sql)
     db.trackChanges('foo2', { exclude: 'ignore' })
@@ -359,6 +334,32 @@ suite('sqlite', { concurrency: false }, () => {
     assert.deepStrictEqual(act, exp)
 
     db.exec('drop table changes;drop table foo2;')
+  })
+
+  test('trackChanges as SQL', () => {
+    let sql
+    sql = `
+      create table foo2(bar integer primary key, baz);
+      create table changes(
+        id integer primary key autoincrement,sql,updated)
+    `
+    db.exec(sql)
+
+    db.trackChanges(['foo2'], { type: 'sql' })
+
+    const chgs = [
+      "insert into foo2(bar,baz) values(12,'fizz')",
+      "update foo2 set bar=12,baz='bozz' where bar=12",
+      'delete from foo2 where bar=12'
+    ]
+
+    chgs.forEach(sql => db.run(sql))
+
+    sql = 'select sql from changes order by id'
+    const act = db.pluck.all(sql)
+
+    assert.deepStrictEqual(act, chgs)
+    db.exec('drop table foo2;drop table changes')
   })
 
   test('pluck', () => {

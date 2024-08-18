@@ -12,8 +12,8 @@
   },
   "scripts": {
     "clean": "rm -rf coverage/ node_modules/.cache/",
-    "lint": "standard '{src,test}/**/*.mjs'|snazzy",
-    "format": "prettier-standard '{src,test}/**/*.mjs'",
+    "lint": "standard '{src,bin,test}/**/*.mjs'|snazzy",
+    "format": "prettier-standard '{src,bin,test}/**/*.mjs'",
     "test": "c8 node --test",
     "coverage": "npm run test && c8 report --reporter=html && sirv coverage/ -p 8000 -H"
   },

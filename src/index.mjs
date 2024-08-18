@@ -1,9 +1,10 @@
-import assert from 'node:assert'
+// import assert from 'node:assert'
 import process from 'node:process'
 import fs from 'node:fs'
 import SQLite3Database from 'better-sqlite3'
 import Bouncer from '@ludlovian/bouncer'
 import sqlmin from './sqlmin.mjs'
+import { trackChanges } from './track-changes.mjs'
 
 export default class Database {
   #db
@@ -199,32 +200,10 @@ export default class Database {
     return this.#addUpdateHook('post', fn)
   }
 
-  trackChanges (table, opts = {}) {
-    const { dest = 'changes' } = opts
-    if (typeof opts.exclude === 'string') {
-      opts.exclude = opts.exclude.split(',')
-    }
-    const exclude = opts.exclude ?? []
-
-    let sql
-    sql = 'select name from pragma_table_info($table) where pk > 0 order by pk'
-    const keys = this.all(sql, { table }).map(c => c.name)
-
-    sql = 'select name from pragma_table_info($table) where pk = 0'
-    const cols = this.all(sql, { table })
-      .map(c => c.name)
-      .filter(col => !exclude.includes(col))
-
-    this.#db.exec(createTrackChangeSQL(table, keys, cols, dest))
-  }
-
-  createProcedure (name, args, sql) {
-    if (!name.includes('.')) name = 'temp.' + name
-    assert(Array.isArray(args))
-    if (!args.length) args = ['unused']
-    sql = sqlmin(sql)
-    if (!sql.endsWith(';')) sql += ';'
-    this.#db.exec(createProcedureSQL(name, args, sql))
+  trackChanges (tableOrTables, opts) {
+    const tables = [tableOrTables].flat()
+    const db = this.#db
+    tables.forEach(table => db.exec(trackChanges(db, table, opts)))
   }
 
   // --------------------------------------------------------------
@@ -367,57 +346,3 @@ class Stmt {
   }
 }
 Stmt.prototype.get = Stmt.prototype.get_
-
-function createTrackChangeSQL (table, keyCols, dataCols, dest) {
-  const cols = [...keyCols, ...dataCols]
-  const pk = [...keyCols.map(() => 1), ...dataCols.map(() => 0)]
-
-  let sql = []
-  // insert trigger
-  sql = [
-    ...sql,
-    `create trigger if not exists temp.${table}_track_ins `,
-    `after insert on ${table} begin `,
-    `insert into ${dest} values(null,'${table}',null,json_object(`,
-    ...cols.map(col => `'${col}',new.${col}`).join(','),
-    '),julianday());end;'
-  ]
-
-  // delete trigger
-  sql = [
-    ...sql,
-    `create trigger if not exists temp.${table}_track_del `,
-    `after delete on ${table} begin `,
-    `insert into ${dest} values(null,'${table}',json_object(`,
-    ...cols.map(col => `'${col}',old.${col}`).join(','),
-    '),null,julianday());end;'
-  ]
-
-  // update trigger (the hard one)
-  sql = [
-    ...sql,
-    `create trigger if not exists temp.${table}_track_upd `,
-    `after update on ${table} begin `,
-    `insert into ${dest} with chgs(col,pre,post,pk) as (values`,
-    ...cols
-      .map((col, i) => `('${col}',old.${col},new.${col},${pk[i]})`)
-      .join(','),
-    '),bef as (select json_group_object(col,pre) as obj ',
-    'from chgs where pre is not post or pk=1),',
-    'aft as (select json_group_object(col,post) as obj ',
-    'from chgs where pre is not post) ',
-    `select null,'${table}',bef.obj,aft.obj,julianday() `,
-    'from bef,aft;',
-    'end;'
-  ]
-  return sql.join('')
-}
-
-function createProcedureSQL (name, args, sql) {
-  return [
-    `create view if not exists ${name}(${args.join(',')}) as `,
-    `select ${args.map(() => '0').join(',')} where 0;`,
-    `create trigger ${name}_sproc instead of insert on ${name} `,
-    `begin ${sql}end;`
-  ].join('')
-}

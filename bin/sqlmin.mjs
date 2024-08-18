@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import process from 'node:process'
 import { readFileSync } from 'node:fs'
-import sqlmin from '../src/sqlmin.mjs'
 
 async function main () {
   const inFile = process.argv[2]
@@ -21,6 +20,22 @@ async function readInput (inFile) {
   let buff = ''
   for await (const chunk of process.stdin) buff += chunk
   return buff
+}
+
+function sqlmin (sql) {
+  return (
+    sql
+      // split into lines
+      .split(/\r?\n/)
+      // remove comments & whitespace
+      .map(line => line.replace(/--.*$/, '').trim())
+      // remove blank lines
+      .filter(Boolean)
+      // rejoin
+      .join(' ')
+      // remove multiple spaces
+      .replace(/  +/g, ' ')
+  )
 }
 
 main()
